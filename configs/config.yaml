@@ -1,0 +1,22 @@
+partitioning:
+  strategy: "vlm"
+  is_dynamic: true
+  exclude_elements: ["Header"]
+
+chunking:
+  strategy: "chunk_by_title"
+  max_characters: 2048
+  new_after_n_chars: 1500
+  overlap: 160
+  overlap_all: false
+  include_orig_elements: false
+  multipage_sections: true
+  contextual_chunking_strategy: "v1"
+
+table_enrichment:
+  subtype: "anthropic_table2html"
+  model: "claude-sonnet-4-20250514"
+
+paths:
+  data_dir: "data"
+  artifacts_dir: "artifacts"
