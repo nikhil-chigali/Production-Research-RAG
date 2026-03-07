@@ -75,9 +75,18 @@ The ingestion pipeline is orchestrated with **Prefect** and structured as:
 parse_and_chunk → clean_chunks → create_documents → embed → upsert_to_pinecone
 ```
 
-- `src/ingestion_steps/parse_and_chunk.py` — implemented (Unstructured on-demand jobs API)
-- `src/ingestion_flow.py` — main Prefect flow with placeholder tasks
-- `src/run_ingestion.py` — CLI entry point
+Each pipeline step lives in its own module under `src/ingestion_steps/`:
+
+- `parse_and_chunk.py` — implemented (Unstructured on-demand jobs API)
+- `clean_chunks.py` — placeholder
+- `create_documents.py` — placeholder
+- `embed.py` — placeholder
+- `upsert_to_pinecone.py` — placeholder
+
+Orchestration and entry point:
+
+- `src/ingestion_flow.py` — main Prefect flow (orchestration only, no task definitions); accepts an explicit list of file names per run
+- `src/run_ingestion.py` — CLI entry point that discovers PDFs in the input folder and invokes the flow in batches (default batch size: 5) to keep API wait times manageable
 
 ## Next steps
 

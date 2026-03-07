@@ -30,10 +30,14 @@ The project is focused on the **ingestion pipeline**: taking PDF documents from 
 │   ├── constants.py           # Path definitions
 │   ├── utils/
 │   │   └── ingest_config.py   # Config loader from YAML
-│   ├── ingestion_steps/       # Prefect tasks for pipeline steps
-│   │   └── parse_and_chunk.py
-│   ├── ingestion_flow.py      # Main Prefect flow
-│   └── run_ingestion.py       # Entry point for the ingestion flow
+│   ├── ingestion_steps/       # Prefect tasks (one file per step)
+│   │   ├── parse_and_chunk.py
+│   │   ├── clean_chunks.py
+│   │   ├── create_documents.py
+│   │   ├── embed.py
+│   │   └── upsert_to_pinecone.py
+│   ├── ingestion_flow.py      # Main Prefect flow (orchestration only)
+│   └── run_ingestion.py       # Entry point with batch discovery
 ├── main.py
 └── pyproject.toml
 ```
@@ -61,3 +65,18 @@ PINECONE_API_KEY=...
 ```
 
 Place PDF files in the `data/{env}/pdfs/` directory before running the pipeline.
+
+## Usage
+
+```bash
+# run ingestion (dev environment, default batch size of 5)
+python -m src.run_ingestion
+
+# run against prod
+python -m src.run_ingestion --env prod
+
+# use a smaller batch size
+python -m src.run_ingestion --batch-size 3
+```
+
+The entry point discovers all PDFs in `data/{env}/pdfs/` and processes them in batches (default: 5 files per batch) to keep API wait times manageable.

@@ -52,27 +52,23 @@ def _build_job_nodes(cfg) -> list[dict]:
 
 def _run_on_demand_job(
     client: UnstructuredClient,
-    input_dir: Path,
+    file_paths: list[Path],
     job_nodes: list[dict],
 ) -> tuple[str, list[str]]:
     """Submit PDFs to the Unstructured on-demand jobs API."""
     logger = get_run_logger()
-    files = []
 
-    for filename in os.listdir(input_dir):
-        full_path = os.path.join(input_dir, filename)
-        if not os.path.isfile(full_path):
-            continue
-        files.append(
-            InputFiles(
-                content=open(full_path, "rb"),
-                file_name=filename,
-                content_type="application/pdf",
-            )
+    if not file_paths:
+        raise ValueError("file_paths is empty — nothing to submit")
+
+    files = [
+        InputFiles(
+            content=open(fp, "rb"),
+            file_name=fp.name,
+            content_type="application/pdf",
         )
-
-    if not files:
-        raise FileNotFoundError(f"No files found in {input_dir}")
+        for fp in file_paths
+    ]
 
     request_data = json.dumps({"job_nodes": job_nodes})
 
@@ -141,10 +137,10 @@ def _download_job_output(
 
 
 @task(name="parse_and_chunk", retries=1, log_prints=True)
-def parse_and_chunk(input_dir: Path, output_dir: Path) -> list[Path]:
+def parse_and_chunk(file_paths: list[Path], output_dir: Path) -> list[Path]:
     """Parse PDFs via Unstructured VLM API and chunk by title.
 
-    Submits all PDFs in input_dir to the Unstructured on-demand jobs API,
+    Submits the given PDF file paths to the Unstructured on-demand jobs API,
     polls until the job completes, and downloads the chunked output JSON
     files to output_dir.
 
@@ -158,9 +154,11 @@ def parse_and_chunk(input_dir: Path, output_dir: Path) -> list[Path]:
     if not api_key:
         raise EnvironmentError("UNSTRUCTURED_API_KEY is not set")
 
+    names = [fp.name for fp in file_paths]
+    logger.info(f"Submitting {len(file_paths)} PDF(s): {names}")
+
     with UnstructuredClient(api_key_auth=api_key) as client:
-        logger.info(f"Submitting PDFs from {input_dir}")
-        job_id, file_ids = _run_on_demand_job(client, input_dir, job_nodes)
+        job_id, file_ids = _run_on_demand_job(client, file_paths, job_nodes)
 
         status = _poll_for_job_status(client, job_id)
         if status != "COMPLETED":
