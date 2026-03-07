@@ -17,6 +17,14 @@ table_enrichment:
   subtype: "anthropic_table2html"
   model: "claude-sonnet-4-20250514"
 
+cleaning:
+  min_chunk_length: 50
+
+embedding:
+  model: "text-embedding-3-small"
+  dimensions: 1536
+  batch_size: 100
+
 paths:
   data_dir: "data"
   artifacts_dir: "artifacts"

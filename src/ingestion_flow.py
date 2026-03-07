@@ -31,12 +31,13 @@ def ingestion_pipeline(file_names: list[str], env: str = "dev") -> None:
 
     data_dir = ROOT_DIR / "data" / env
     input_dir = data_dir / "pdfs"
-    output_dir = data_dir / "parsed"
+    parsed_dir = data_dir / "parsed"
+    cleaned_dir = data_dir / "cleaned"
 
     file_paths = [input_dir / name for name in file_names]
 
-    parsed_paths = parse_and_chunk(file_paths=file_paths, output_dir=output_dir)
-    cleaned_paths = clean_chunks(parsed_paths)
+    parsed_paths = parse_and_chunk(file_paths=file_paths, output_dir=parsed_dir)
+    cleaned_paths = clean_chunks(parsed_paths, output_dir=cleaned_dir)
     documents = create_documents(cleaned_paths)
     vectors = embed(documents)
     upsert_to_pinecone(vectors)

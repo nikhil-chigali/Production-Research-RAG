@@ -11,7 +11,7 @@ The project is focused on the **ingestion pipeline**: taking PDF documents from 
 | Layer | Tool |
 |---|---|
 | Document parsing | Unstructured.io (VLM cloud API) |
-| Chunking | `by_title` strategy (Unstructured API), contextual prefixes, token-based (`tiktoken`, `cl100k_base` encoding) |
+| Chunking | `chunk_by_title` (Unstructured API) with contextual prefixes |
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Sparse vectors | `pinecone-text` BM25Encoder |
 | Vector store | Pinecone (serverless) |
@@ -38,7 +38,6 @@ The project is focused on the **ingestion pipeline**: taking PDF documents from 
 │   │   └── upsert_to_pinecone.py
 │   ├── ingestion_flow.py      # Main Prefect flow (orchestration only)
 │   └── run_ingestion.py       # Entry point with batch discovery
-├── main.py
 └── pyproject.toml
 ```
 
