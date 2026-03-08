@@ -1,8 +1,22 @@
 # Roadmap
 
-## v1 — Q&A with citations
+## v1 — Q&A with citations (implemented)
 
-Single-turn question answering over the paper corpus. User asks a question, system retrieves relevant chunks via hybrid search (dense + sparse), LLM synthesizes an answer. Every claim links back to the source paper, section, and page number using chunk metadata (`paper_title`, `section`, `page_number`).
+Single-turn question answering over the paper corpus. User asks a question, system retrieves relevant chunks via hybrid search (dense + sparse), LLM synthesizes an answer. Every claim links back to the source paper, section, and page number using chunk metadata (`paper_title`, `section`, `page_number`). Implemented as the generation pipeline: `retrieve → format_context → generate_answer` using OpenAI `gpt-4o-mini`.
+
+## Generation Phase 2 — Query intelligence
+
+Add query decomposition before retrieval for complex multi-topic questions.
+
+**Task: `generate_search_queries`** (`src/generation_steps/generate_search_queries.py`) — Structured LLM call (OpenAI `gpt-4o-mini`) that decides whether the user's query needs decomposition. Simple queries pass through as-is; complex queries (e.g., "Compare BERT and Transformer attention") are split into targeted sub-queries. Output: `{"needs_decomposition": bool, "queries": list[str]}`.
+
+**Changes to `retrieve`:** Run hybrid search per generated query, then deduplicate results by `element_id`. Merge using simple union (or Reciprocal Rank Fusion if ranking matters).
+
+## Generation Phase 3 — Guardrails
+
+Add input validation to reject off-topic queries before retrieval.
+
+**Task: `evaluate_query`** (`src/generation_steps/evaluate_query.py`) — Structured LLM call (OpenAI `gpt-4o-mini`, short prompt) that classifies the query as relevant or not to the research paper corpus. Returns `{"is_relevant": bool, "reason": str}`. If not relevant, the flow short-circuits with a polite refusal message instead of running retrieval.
 
 ## v2 — Multi-turn conversation
 
@@ -34,12 +48,14 @@ Queries that span multiple papers: "Compare how BERT and GPT handle pre-training
 
 - **Evaluation harness** — Build a small eval set (10-20 question/answer pairs with ground-truth source chunks). Measure retrieval recall (are the right chunks retrieved?) and answer quality (faithfulness, relevance). This is the single most impressive thing to show in an interview or report.
 - **Observability** — Prefect handles pipeline observability. Add LLM call tracing on the query side (LangSmith or similar) to track latency, token usage, and retrieval quality per query.
-- **Configurable retrieval** — Expose retrieval parameters (top-k, alpha for hybrid weighting, reranking) via the YAML config. Being able to A/B test settings and show measured improvements is a strong talking point.
+- **Configurable retrieval** — ~~Expose retrieval parameters (top-k, alpha for hybrid weighting, reranking) via the YAML config.~~ Done: `retrieval.top_k` and `retrieval.alpha` are in `config.yaml`. Reranking is a future addition.
 
 ## Recommended build order
 
-1. v1 (Q&A with citations) — proves the pipeline works end-to-end
-2. v2 (multi-turn) — low effort, big UX improvement
-3. Evaluation harness — makes everything measurable and defensible
-4. v3 (multi-paper synthesis) — showcases hybrid retrieval
-5. v4-v6 as stretch goals
+1. ~~v1 (Q&A with citations)~~ — done
+2. Generation Phase 2 (query decomposition) — improves multi-topic retrieval
+3. Generation Phase 3 (guardrails) — rejects off-topic queries
+4. v2 (multi-turn) — low effort, big UX improvement
+5. Evaluation harness — makes everything measurable and defensible
+6. v3 (multi-paper synthesis) — showcases hybrid retrieval
+7. v4-v6 as stretch goals

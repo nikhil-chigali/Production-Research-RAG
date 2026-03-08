@@ -32,6 +32,15 @@ pinecone:
   metric: "dotproduct"
   upsert_batch_size: 100
 
+retrieval:
+  top_k: 5
+  alpha: 0.5
+
+generation:
+  model: "gpt-4o-mini"
+  temperature: 0.0
+  max_tokens: 1024
+
 paths:
   data_dir: "data"
   artifacts_dir: "artifacts"

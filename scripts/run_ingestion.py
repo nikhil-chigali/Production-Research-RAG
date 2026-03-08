@@ -1,13 +1,12 @@
 """Entry point for the ingestion pipeline.
 
 Usage:
-    python -m src.run_ingestion
-    python -m src.run_ingestion --env prod
-    python -m src.run_ingestion --batch-size 3
+    python scripts/run_ingestion.py
+    python scripts/run_ingestion.py --env prod
+    python scripts/run_ingestion.py --batch-size 3
 """
 
 import argparse
-import math
 from pathlib import Path
 
 from src.ingestion_flow import ingestion_pipeline

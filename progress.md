@@ -2,7 +2,7 @@
 
 ## Project overview
 
-HybridRAG-Bench is a hybrid RAG pipeline for research papers. The current focus is on building a robust **ingestion pipeline** that parses, chunks, embeds, and stores PDFs for downstream retrieval. The pipeline is orchestrated with Prefect and uses LangChain as the document abstraction layer.
+HybridRAG-Bench is a hybrid RAG pipeline for research papers. The **ingestion pipeline** parses, chunks, cleans, embeds, and upserts PDFs into a Pinecone hybrid index. The **generation pipeline** (Phase 1 complete) retrieves relevant chunks via hybrid search, formats context, and generates cited answers via OpenAI `gpt-4o-mini`. Both pipelines are orchestrated with Prefect and use LangChain as the document abstraction layer.
 
 ## Parsing & chunking experiments
 
@@ -86,7 +86,7 @@ Each pipeline step lives in its own module under `src/ingestion_steps/`:
 Orchestration and entry point:
 
 - `src/ingestion_flow.py` — main Prefect flow (orchestration only, no task definitions); accepts an explicit list of file names per run
-- `src/run_ingestion.py` — CLI entry point that discovers PDFs in the input folder and invokes the flow in batches (default batch size: 5) to keep API wait times manageable
+- `scripts/run_ingestion.py` — CLI entry point that discovers PDFs in the input folder and invokes the flow in batches (default batch size: 5) to keep API wait times manageable
 
 ## Chunk cleaning (implemented)
 
@@ -167,10 +167,102 @@ The `upsert_to_pinecone` task (`src/ingestion_steps/upsert_to_pinecone.py`) comp
 - `pinecone.metric` — distance metric (`dotproduct`)
 - `pinecone.upsert_batch_size` — vectors per upsert call
 
-## Next steps
+## Generation pipeline — implemented so far
 
-1. **Metadata enrichment** — extract `authors`, `venue`, `year` from first-page content or filename conventions
-2. **v1 Q&A with citations** — build retrieval module (hybrid search with tunable alpha) and answer generation with source citations
+- `retrieve` — implemented (`src/generation_steps/retrieve.py`). Wraps `PineconeHybridSearchRetriever` in a Prefect `@task`. Config: `retrieval.top_k`, `retrieval.alpha`.
+- `format_context` — implemented (`src/generation_steps/format_context.py`). Formats documents as numbered `[Source N]` blocks.
+- `generate_answer` — implemented (`src/generation_steps/generate_answer.py`). Calls OpenAI `gpt-4o-mini` via `langchain_openai.ChatOpenAI` with a RAG system prompt (`src/prompts/rag.py`). Returns `{"answer": str, "sources": list[dict]}`.
+- `generation_flow.py` — implemented. Chains `retrieve → format_context → generate_answer`.
+- Prompts — `src/prompts/rag.py` defines `QA_PROMPT` as a `ChatPromptTemplate`. System message instructs the model to answer only from provided sources and cite as `[Source N]`.
+- CLI entry point — `scripts/run_generation.py` (`--query "..." --env dev`).
+
+## Next steps — Generation (phased)
+
+The full generation workflow:
+
+```
+User query
+    │
+    ▼
+[1] evaluate_query              ← guardrail (Phase 3)
+    │
+    ▼ (if relevant)
+[2] generate_search_queries     ← query decomposition (Phase 2)
+    │
+    ▼
+[3] retrieve                    ← hybrid search per query + deduplicate (Phase 1 done ✓)
+    │
+    ▼
+[4] format_context              ← pure transform (Phase 1 done ✓)
+    │
+    ▼
+[5] generate_answer             ← LLM generation with citations (Phase 1 done ✓)
+    │
+    ▼
+{answer, sources}
+```
+
+### Phase 1 — Core loop (done ✓)
+
+End-to-end Q&A working: `retrieve → format_context → generate_answer`.
+
+**Task: `generate_answer`** (`src/generation_steps/generate_answer.py`)
+
+Uses `langchain_openai.ChatOpenAI` with `gpt-4o-mini`. System prompt (from `src/prompts/rag.py`) instructs the model to answer only from provided sources and cite as `[Source N]`. Returns a structured dict: `{"answer": str, "sources": list[dict]}` with each source's paper title, section, page, and text snippet.
+
+**Prompt management** — `src/prompts/` directory with `ChatPromptTemplate` objects as module-level constants. Keeps prompts version-controlled, separated from logic, and natively integrated with LangChain.
+
+**Config** (`generation` section in `config.yaml`):
+- `generation.model` — LLM model name (default `gpt-4o-mini`)
+- `generation.temperature` — sampling temperature (default `0.0`)
+- `generation.max_tokens` — response length cap (default `1024`)
+
+### Phase 2 — Query intelligence
+
+Add query decomposition before retrieval for complex multi-topic questions.
+
+**Task: `generate_search_queries`** (`src/generation_steps/generate_search_queries.py`)
+
+Structured LLM call (OpenAI `gpt-4o-mini`) that decides whether the user's query needs decomposition. Simple queries pass through as-is; complex queries (e.g., "Compare BERT and Transformer attention") are split into targeted sub-queries.
+
+Output format:
+```json
+{
+  "needs_decomposition": true,
+  "queries": ["How does BERT use attention?", "How does the Transformer use attention?"]
+}
+```
+
+**Changes to `retrieve`:** Run hybrid search per generated query, then deduplicate results by `element_id`. Merge using simple union (or Reciprocal Rank Fusion if ranking matters).
+
+### Phase 3 — Guardrails
+
+Add input validation to reject off-topic queries before retrieval.
+
+**Task: `evaluate_query`** (`src/generation_steps/evaluate_query.py`)
+
+Structured LLM call (OpenAI `gpt-4o-mini`, short prompt) that classifies the query as relevant or not to the research paper corpus. Returns `{"is_relevant": bool, "reason": str}`. If not relevant, the flow short-circuits with a polite refusal message instead of running retrieval.
+
+### File structure (all phases)
+
+```
+src/
+├── prompts/
+│   ├── __init__.py
+│   └── rag.py                        # QA system prompt, guardrail prompt, query decomposition prompt
+├── generation_steps/
+│   ├── __init__.py
+│   ├── evaluate_query.py             # Phase 3: guardrail
+│   ├── generate_search_queries.py    # Phase 2: query decomposition
+│   ├── retrieve.py                   # Phase 1: hybrid search (done ✓)
+│   ├── format_context.py             # Phase 1: context formatting (done ✓)
+│   └── generate_answer.py            # Phase 1: LLM answer with citations
+├── generation_flow.py                # Orchestration (done ✓, will extend per phase)
+scripts/
+└── run_generation.py                 # CLI entry point
+```
+
+**Env vars required:** `OPENAI_API_KEY`, `PINECONE_API_KEY`.
 
 ## Tech stack
 
@@ -181,6 +273,7 @@ The `upsert_to_pinecone` task (`src/ingestion_steps/upsert_to_pinecone.py`) comp
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Sparse vectors | `pinecone-text` BM25Encoder |
 | Vector store | Pinecone (serverless) |
+| Generation LLM | OpenAI `gpt-4o-mini` (via `langchain-openai`) |
 | Orchestration | Prefect |
 | Framework | LangChain |
 | Language | Python >= 3.12 |
