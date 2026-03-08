@@ -81,7 +81,7 @@ Each pipeline step lives in its own module under `src/ingestion_steps/`:
 - `clean_chunks.py` — implemented (text cleaning + drop filters)
 - `create_documents.py` — implemented (LangChain Document objects with structured metadata)
 - `embed.py` — implemented (dense + sparse hybrid embeddings)
-- `upsert_to_pinecone.py` — placeholder
+- `upsert_to_pinecone.py` — implemented (Pinecone serverless index creation + batch upsert)
 
 Orchestration and entry point:
 
@@ -145,10 +145,32 @@ We use `BM25Encoder.default()` which loads pre-trained IDF weights from MS MARCO
 
 **Future improvement:** If BM25 retrieval quality needs tuning, switch to a corpus-fitted approach: fit once on the full corpus, serialize to `artifacts/bm25_params.json`, and load that fixed encoder in `_embed_sparse` instead of calling `.default()`. This would require a two-pass pipeline (fit first, then encode) but would give IDF values calibrated to academic paper vocabulary.
 
+## Upsert to Pinecone (implemented)
+
+The `upsert_to_pinecone` task (`src/ingestion_steps/upsert_to_pinecone.py`) completes the ingestion pipeline by writing hybrid vectors into a Pinecone serverless index.
+
+**Index setup:**
+- Index name: `arxiv-research-rag-{env}` (e.g., `arxiv-research-rag-dev`)
+- Created automatically if it doesn't exist (`_ensure_index` helper)
+- Serverless spec: AWS `us-east-1`, `dotproduct` metric (required for hybrid dense + sparse search)
+- Dimensions: 1536 (matches `text-embedding-3-small`)
+
+**Upsert behavior:**
+- Vectors are upserted in configurable batches (default 100, via `pinecone.upsert_batch_size` in `config.yaml`)
+- All vectors go into the default namespace (no per-paper namespace)
+- Upserts are idempotent by vector `id` (`element_id` from Unstructured) — re-ingesting the same paper overwrites existing vectors, no duplicates
+- Index stats (total vector count) are logged after each upsert
+
+**Config section** added to `configs/config.yaml`:
+- `pinecone.index_name_prefix` — base name for index (`arxiv-research-rag`)
+- `pinecone.cloud` / `pinecone.region` — serverless deployment target
+- `pinecone.metric` — distance metric (`dotproduct`)
+- `pinecone.upsert_batch_size` — vectors per upsert call
+
 ## Next steps
 
 1. **Metadata enrichment** — extract `authors`, `venue`, `year` from first-page content or filename conventions
-2. **Upsert** — implement `upsert_to_pinecone` task: batch upsert hybrid vectors into Pinecone serverless index
+2. **v1 Q&A with citations** — build retrieval module (hybrid search with tunable alpha) and answer generation with source citations
 
 ## Tech stack
 

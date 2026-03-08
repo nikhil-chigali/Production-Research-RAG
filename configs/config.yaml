@@ -25,6 +25,13 @@ embedding:
   dimensions: 1536
   batch_size: 100
 
+pinecone:
+  index_name_prefix: "arxiv-research-rag"
+  cloud: "aws"
+  region: "us-east-1"
+  metric: "dotproduct"
+  upsert_batch_size: 100
+
 paths:
   data_dir: "data"
   artifacts_dir: "artifacts"

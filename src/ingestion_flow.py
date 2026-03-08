@@ -40,6 +40,6 @@ def ingestion_pipeline(file_names: list[str], env: str = "dev") -> None:
     cleaned_paths = clean_chunks(parsed_paths, output_dir=cleaned_dir)
     documents = create_documents(cleaned_paths)
     vectors = embed(documents)
-    upsert_to_pinecone(vectors)
+    upsert_to_pinecone(vectors, env=env)
 
     logger.info("Ingestion pipeline complete")
