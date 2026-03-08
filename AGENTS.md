@@ -24,6 +24,8 @@ Implemented and verified:
 - **Generation flow** — `src/generation_flow.py` chains `retrieve → format_context → generate_answer`.
 - **Generation entry point** — `scripts/run_generation.py` CLI with `--query` and `--env` args.
 - **Generation notebook** — `notebooks/generate.ipynb` has test cells for `retrieve`, `format_context`, and `generate_answer`.
+- **Streamlit UI** — `app.py` entry point with sidebar env toggle (`dev`/`prod`) and two tabs. Tab 1 (`src/ui/file_manager.py`): PDF upload, status badges, ingestion trigger via `st.status`. Tab 2 (`src/ui/chat.py`): chat interface calling `generation()` flow, answers with expandable source citations.
+- **Processing state** — `src/ui/state.py` tracks ingestion status via `data/{env}/.processing_state.json`. Auto-reconciles files ingested outside the UI by fuzzy-matching normalized PDF stems as prefixes of cleaned JSON stems.
 
 ## Active Architecture
 
@@ -44,15 +46,21 @@ Implemented and verified:
 │   ├── generation_flow.py           # @flow: retrieve → format_context → generate_answer
 │   ├── prompts/
 │   │   └── rag.py                   # QA_PROMPT ChatPromptTemplate
+│   ├── ui/                          # Streamlit UI modules
+│   │   ├── state.py                 # Processing state tracker (auto-reconciliation)
+│   │   ├── file_manager.py          # Tab 1: PDF listing, upload, ingestion trigger
+│   │   └── chat.py                  # Tab 2: Q&A chat with source citations
 │   ├── utils/ingest_config.py       # get_config() → ConfigDict
 │   └── constants.py                 # Path helpers (ENV env var)
+├── app.py                           # Streamlit entry point (sidebar + 2 tabs)
 ├── scripts/
 │   ├── run_ingestion.py             # CLI entry point (batch discovery)
 │   └── run_generation.py            # CLI entry point (--query, --env)
 ├── data/{env}/
 │   ├── pdfs/                        # Input PDFs
 │   ├── parsed/                      # Raw chunked JSON from Unstructured
-│   └── cleaned/                     # Post-cleaning JSON
+│   ├── cleaned/                     # Post-cleaning JSON
+│   └── .processing_state.json       # UI processing state (auto-generated)
 ├── notebooks/
 │   ├── ingest.ipynb                 # Ingestion step-by-step runner
 │   └── generate.ipynb               # Generation step-by-step runner
@@ -67,6 +75,7 @@ Implemented and verified:
 - Config is YAML-first; `get_config()` returns a `ConfigDict` with dot-access. Sections: `partitioning`, `chunking`, `table_enrichment`, `cleaning`, `embedding`, `pinecone`, `retrieval`, `generation`, `paths`.
 - Chunk text uses `"Prefix: <summary>; Original: <content>"` format. Split on `"; Original: "`.
 - Embedding text is contextually enriched: `prefix + ". " + original`. This bakes section hierarchy and paper title into the vectors.
+- Streamlit UI modules live under `src/ui/`. Each tab is a separate module with a `render(env)` function. `app.py` is the entry point — it handles the sidebar and delegates to tab modules. No pipeline code is modified; flows are called directly (Prefect ephemeral mode).
 
 ## Pending Tasks
 
@@ -88,3 +97,5 @@ Implemented and verified:
 - **`generate_answer` uses OpenAI `gpt-4o-mini`** via `langchain_openai.ChatOpenAI`. The RAG prompt (`src/prompts/rag.py`) is a `ChatPromptTemplate` with `{context}` and `{query}` variables. The LLM is instructed to answer only from sources and cite as `[Source N]`. Returns `{"answer", "sources"}` where sources are extracted from document metadata.
 - **Prompt management** — `src/prompts/` contains `ChatPromptTemplate` objects as module-level constants. Keeps prompts version-controlled and separated from task logic.
 - **Notebook** (`ingest.ipynb`) uses `Path.cwd().parent` as `ROOT_DIR` and `os.chdir(ROOT_DIR)` in cell 0. The `flow` import is shared across cells.
+- **Streamlit UI** wraps existing flows without modifying them. `app.py` loads dotenv at import time. Switching envs in the sidebar clears chat history and checkbox state. Processing state file (`.processing_state.json`) is per-environment and auto-generated.
+- **Processing state reconciliation** uses normalized-prefix matching: `_normalize()` strips non-alphanumeric chars and lowercases. A PDF is considered processed if its normalized stem is a prefix of any cleaned JSON's normalized stem. This handles Unstructured's filename transformations (spaces → hyphens, dots removed, hash appended).

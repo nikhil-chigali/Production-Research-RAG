@@ -264,6 +264,44 @@ scripts/
 
 **Env vars required:** `OPENAI_API_KEY`, `PINECONE_API_KEY`.
 
+## Streamlit UI (implemented)
+
+A two-tab web application (`app.py`) that wraps the existing Prefect flows without modifying any pipeline code.
+
+**Architecture:**
+
+```
+app.py (entry point)
+├── Sidebar: env toggle (dev / prod)
+├── Tab 1: File Manager  →  src/ui/file_manager.py  →  ingestion_flow.py
+└── Tab 2: Chat          →  src/ui/chat.py           →  generation_flow.py
+
+State tracking: src/ui/state.py  →  data/{env}/.processing_state.json
+```
+
+**Tab 1 — File Manager** (`src/ui/file_manager.py`):
+
+- `st.file_uploader` for uploading PDFs to `data/{env}/pdfs/`
+- Lists all PDFs with file size and processing status badges (green "Processed" / gray "Not Processed")
+- Checkbox selection + "Process Selected" button to trigger ingestion
+- Real-time pipeline progress via `st.status`
+- On success, updates `.processing_state.json` and refreshes the view
+
+**Tab 2 — Chat** (`src/ui/chat.py`):
+
+- Conversational interface using `st.chat_message` / `st.chat_input`
+- Each query calls `generation(query=query, env=env)` from the existing generation flow
+- Answers rendered as chat bubbles with `st.expander("Sources")` showing paper title, section, and page per source
+- Chat history stored in `st.session_state` per environment — switching envs clears history
+
+**Processing state tracker** (`src/ui/state.py`):
+
+- Maintains `data/{env}/.processing_state.json` mapping PDF filenames to processing timestamps
+- Auto-reconciliation on load: since Unstructured transforms filenames (spaces → hyphens, dots removed, hash appended), exact matching is impossible. Instead, both PDF stems and cleaned JSON stems are normalized (lowercased, non-alphanumeric stripped), and a PDF is matched if its normalized stem is a prefix of any cleaned JSON's normalized stem
+- Files ingested outside the UI (via CLI or notebooks) are automatically detected
+
+**Prefect compatibility:** Calling `ingestion_pipeline()` or `generation()` directly creates ephemeral Prefect flow runs (Prefect 3.x ephemeral mode). No running Prefect server required.
+
 ## Tech stack
 
 | Layer | Tool |

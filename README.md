@@ -4,10 +4,11 @@ A hybrid RAG pipeline for research papers with end-to-end ingestion and cited Q&
 
 ## Current scope
 
-The project has two pipelines:
+The project has two pipelines and a web UI:
 
 - **Ingestion pipeline** — Takes PDF documents from `data/{env}/pdfs/`, parses them via the Unstructured.io **VLM cloud API**, chunks with `by_title` strategy and contextual prefixes, generates dense (OpenAI `text-embedding-3-small`) and sparse (BM25) embeddings, and upserts hybrid vectors into Pinecone.
 - **Generation pipeline** — Retrieves relevant chunks via hybrid search, formats them as numbered source blocks, and generates an answer with `[Source N]` citations via OpenAI `gpt-4o-mini`.
+- **Streamlit UI** — A two-tab web application for managing PDFs (upload, view processing status, trigger ingestion) and chatting with the paper corpus (Q&A with expandable source citations).
 
 Both pipelines are orchestrated with **Prefect** and use **LangChain** as the integration layer.
 
@@ -23,11 +24,13 @@ Both pipelines are orchestrated with **Prefect** and use **LangChain** as the in
 | Generation LLM | OpenAI `gpt-4o-mini` (via `langchain-openai`) |
 | Orchestration | Prefect |
 | Framework | LangChain |
+| Web UI | Streamlit |
 | Language | Python >= 3.12 |
 
 ## Project structure
 
 ```
+├── app.py                     # Streamlit entry point
 ├── data/                      # Input PDFs ({env}/pdfs/) and parsed outputs ({env}/parsed/)
 ├── artifacts/                 # Intermediate outputs (BM25 encoder, etc.)
 ├── configs/
@@ -48,8 +51,12 @@ Both pipelines are orchestrated with **Prefect** and use **LangChain** as the in
 │   │   ├── format_context.py
 │   │   └── generate_answer.py
 │   ├── generation_flow.py     # Generation Prefect flow
-│   └── prompts/
-│       └── rag.py             # QA prompt template
+│   ├── prompts/
+│   │   └── rag.py             # QA prompt template
+│   └── ui/                    # Streamlit UI modules
+│       ├── state.py           # Processing state tracker
+│       ├── file_manager.py    # Tab 1: PDF management + ingestion
+│       └── chat.py            # Tab 2: Q&A chat interface
 ├── scripts/
 │   ├── run_ingestion.py       # Ingestion entry point (batch discovery)
 │   └── run_generation.py      # Generation entry point (--query, --env)
@@ -90,6 +97,21 @@ PINECONE_API_KEY=...
 Place PDF files in the `data/{env}/pdfs/` directory before running the pipeline.
 
 ## Usage
+
+### Streamlit app (recommended)
+
+```bash
+streamlit run app.py
+```
+
+The app provides two tabs:
+
+- **File Manager** — Upload PDFs, view processing status (auto-detects previously ingested files), select files, and trigger the ingestion pipeline with real-time progress.
+- **Chat** — Ask questions about your ingested papers. Answers include `[Source N]` citations with expandable metadata (paper title, section, page number).
+
+Use the sidebar radio toggle to switch between `dev` and `prod` environments.
+
+### CLI
 
 ```bash
 # run ingestion (dev environment, default batch size of 5)

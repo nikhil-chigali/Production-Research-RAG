@@ -50,12 +50,17 @@ Queries that span multiple papers: "Compare how BERT and GPT handle pre-training
 - **Observability** — Prefect handles pipeline observability. Add LLM call tracing on the query side (LangSmith or similar) to track latency, token usage, and retrieval quality per query.
 - **Configurable retrieval** — ~~Expose retrieval parameters (top-k, alpha for hybrid weighting, reranking) via the YAML config.~~ Done: `retrieval.top_k` and `retrieval.alpha` are in `config.yaml`. Reranking is a future addition.
 
+## Streamlit UI (implemented)
+
+Two-tab web application (`streamlit run app.py`) wrapping the existing pipelines. Tab 1 is a file manager for uploading PDFs and triggering ingestion with real-time progress. Tab 2 is a chat interface for Q&A with expandable source citations. Sidebar toggle switches between `dev` and `prod` environments. Processing state auto-detects files ingested via CLI or notebooks through fuzzy filename matching.
+
 ## Recommended build order
 
 1. ~~v1 (Q&A with citations)~~ — done
-2. Generation Phase 2 (query decomposition) — improves multi-topic retrieval
-3. Generation Phase 3 (guardrails) — rejects off-topic queries
-4. v2 (multi-turn) — low effort, big UX improvement
-5. Evaluation harness — makes everything measurable and defensible
-6. v3 (multi-paper synthesis) — showcases hybrid retrieval
-7. v4-v6 as stretch goals
+2. ~~Streamlit UI~~ — done
+3. Generation Phase 2 (query decomposition) — improves multi-topic retrieval
+4. Generation Phase 3 (guardrails) — rejects off-topic queries
+5. v2 (multi-turn) — low effort, big UX improvement
+6. Evaluation harness — makes everything measurable and defensible
+7. v3 (multi-paper synthesis) — showcases hybrid retrieval
+8. v4-v6 as stretch goals
